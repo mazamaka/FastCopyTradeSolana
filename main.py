@@ -1,14 +1,10 @@
 import asyncio
-from solana.rpc.api import Client
+import json
 from solana.rpc.websocket_api import connect
 from solders.pubkey import Pubkey
-from solders.rpc.config import RpcTransactionLogsFilterMentions
-from websockets.exceptions import ConnectionClosedError
 
 WHALE_ADDRESS = Pubkey.from_string("DfMxre4cKmvogbLrPigxmibVTTQDuzjdXojWzjCXXhzj")
-HTTP_RPC_URL = "https://api.mainnet-beta.solana.com"
-WS_RPC_URL = "wss://api.mainnet-beta.solana.com"
-client = Client(HTTP_RPC_URL)
+WS_RPC_URL = "wss://api.devnet.solana.com"
 
 
 def parse_logs_for_token_purchase(logs: list) -> str | None:
@@ -20,48 +16,71 @@ def buy_token(token_bought: str):
     print(f"ALERT: need to buy token: {token_bought}")
 
 
-async def subscribe_to_logs():
-    while True:
+async def process_logs(websocket):
+    async for raw_message in websocket:
         try:
-            async with connect(
-                WS_RPC_URL,
-                ping_interval=20,
-                ping_timeout=10,
-            ) as websocket:
-                filter_mentions = RpcTransactionLogsFilterMentions(pubkey=WHALE_ADDRESS)
+            message = json.loads(raw_message)
+            print(f"Received message: {message}")
 
-                req_id = websocket.increment_counter_and_get_id()
-                print(f"Sending subscription request with ID {req_id}...")
+            # Проверяем наличие логов
+            params = message.get("params", {})
+            result = params.get("result", {})
+            logs = result.get("logs", [])
 
-                subscription_request = {
-                    "jsonrpc": "2.0",
-                    "id": req_id,
-                    "method": "logsSubscribe",
-                    "params": [
-                        {"mentions": [str(WHALE_ADDRESS)]},
-                        {"commitment": "confirmed"},
-                    ],
-                }
-
-                await websocket.send(subscription_request)
-                print(f"Subscription request sent: {subscription_request}")
-
-                while True:
-                    try:
-                        # Получение всех сообщений для отладки
-                        message = await websocket.recv()
-                        print(f"Received message: {message}")
-                    except ConnectionClosedError as e:
-                        print(f"Connection closed: {e}")
-                        break
+            token_to_buy = parse_logs_for_token_purchase(logs)
+            if token_to_buy:
+                buy_token(token_to_buy)
         except Exception as e:
-            print(f"Error: {e}")
-            await asyncio.sleep(5)
+            print(f"Error processing message: {e}")
 
+
+async def subscribe_to_logs():
+    async with connect(WS_RPC_URL) as websocket:
+        subscription_request = {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "logsSubscribe",
+            "params": [{"mentions": [str(WHALE_ADDRESS)]}, {"commitment": "confirmed"}]
+        }
+
+        print(f"Sending subscription request: {subscription_request}")
+        await websocket.send(json.dumps(subscription_request))
+
+        # Получаем ответ на подписку
+        raw_response = await websocket.recv()
+        response = json.loads(raw_response)
+        print(f"Subscription response: {response}")
+
+        if "result" not in response:
+            print("Subscription failed.")
+            return
+
+        subscription_id = response["result"]
+        print(f"Subscribed with ID: {subscription_id}")
+
+        try:
+            # Обрабатываем входящие логи
+            await process_logs(websocket)
+        except Exception as e:
+            print(f"Error while processing logs: {e}")
+        finally:
+            unsubscribe_request = {
+                "jsonrpc": "2.0",
+                "id": 2,
+                "method": "logsUnsubscribe",
+                "params": [subscription_id]
+            }
+            print(f"Sending unsubscribe request: {unsubscribe_request}")
+            await websocket.send(json.dumps(unsubscribe_request))
 
 
 async def main():
-    await subscribe_to_logs()
+    while True:
+        try:
+            await subscribe_to_logs()
+        except Exception as e:
+            print(f"Error in subscription: {e}")
+            await asyncio.sleep(5)
 
 
 if __name__ == "__main__":
