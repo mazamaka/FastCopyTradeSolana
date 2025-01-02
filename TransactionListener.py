@@ -80,8 +80,30 @@ class TransactionListener:
             logger.info(f"New transaction detected [{commitment}]: {signature}")
             await self._send_transaction_request(ws, signature, commitment)
 
+    # @staticmethod
+    # async def _send_transaction_request(ws, signature: str, commitment: str):
+    #     subscription_request = {
+    #         "jsonrpc": "2.0",
+    #         "id": 1,
+    #         "method": "getTransaction",
+    #         "params": [
+    #             signature,
+    #             {
+    #                 "encoding": "jsonParsed",
+    #                 "commitment": commitment,
+    #                 "maxSupportedTransactionVersion": 0
+    #             }
+    #         ]
+    #     }
+    #     logger.info(f"Fetching data for signature: {signature}")
+    #     await ws.send(orjson.dumps(subscription_request).decode("utf-8"))
+    #     raw_response = await ws.recv()
+    #     transaction_data = orjson.loads(raw_response)
+    #     parse_open_order_data(transaction_data)
+
     @staticmethod
-    async def _send_transaction_request(ws, signature: str, commitment: str):
+    async def _send_transaction_request(ws, signature: str, commitment: str, max_retries: int = 10,
+                                        delay_between_retries: float = 0.1):
         subscription_request = {
             "jsonrpc": "2.0",
             "id": 1,
@@ -95,11 +117,23 @@ class TransactionListener:
                 }
             ]
         }
-        logger.info(f"Fetching data for signature: {signature}")
-        await ws.send(orjson.dumps(subscription_request).decode("utf-8"))
-        raw_response = await ws.recv()
-        transaction_data = orjson.loads(raw_response)
-        parse_open_order_data(transaction_data)
+
+        retries = 0
+        while retries < max_retries:
+            logger.info(f"Fetching data for signature: {signature}, attempt: {retries + 1}")
+            await ws.send(orjson.dumps(subscription_request).decode("utf-8"))
+            raw_response = await ws.recv()
+            transaction_data = orjson.loads(raw_response)
+
+            if transaction_data.get("result") is not None:
+                parse_open_order_data(transaction_data)
+                return
+
+            logger.warning(f"No result for transaction: {signature}. Retrying...")
+            retries += 1
+            await asyncio.sleep(delay_between_retries)
+
+        logger.error(f"Failed to fetch valid transaction data for signature: {signature} after {max_retries} attempts.")
 
     async def _subscribe(self, ws, commitment: str):
         subscription_request = {
