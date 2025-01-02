@@ -4,7 +4,7 @@ from jsonpath_ng import parse
 import orjson
 from loguru import logger
 from websockets import connect
-from config import WS_RPC_URL, WALLET_ADDRESS
+from config import WS_RPC_URL, WALLET_ADDRESS, TRANSACTION_STATUS
 from JupiterSwap import JupiterClient
 
 logger.add("app.log", format="{time} {level} {message}", level="INFO", rotation="10 MB", compression="zip")
@@ -32,6 +32,9 @@ def calculate_delay(transaction_data):
 
 def parse_open_order_data(transaction_data):
     try:
+
+        logger.info(f'transaction_data: {transaction_data}')
+
         str_data = str(transaction_data)
 
         if 'Program log: Instruction: Sell' in str_data:
@@ -62,6 +65,7 @@ class TransactionListener:
         self.ws_rpc_url = ws_rpc_url
         self.wallet_address = wallet_address
         self.jup = JupiterClient()
+        logger.info(f"Check wallet_address: {self.wallet_address}")
 
     async def _process_logs(self, ws, raw_message: str, commitment: str):
         try:
@@ -72,6 +76,7 @@ class TransactionListener:
 
         signature = message.get("params", {}).get("result", {}).get("value", {}).get("signature")
         if signature:
+            logger.info(f"===="*50)
             logger.info(f"New transaction detected [{commitment}]: {signature}")
             await self._send_transaction_request(ws, signature, commitment)
 
@@ -113,9 +118,9 @@ class TransactionListener:
 
     async def start_listening(self):
         async with connect(self.ws_rpc_url, ping_interval=10, ping_timeout=1) as ws:
-            await self._subscribe(ws, "confirmed")
+            await self._subscribe(ws, TRANSACTION_STATUS)
             async for raw_message in ws:
-                await self._process_logs(ws, raw_message, commitment="confirmed")
+                await self._process_logs(ws, raw_message, commitment=TRANSACTION_STATUS)
 
 
 async def main():
