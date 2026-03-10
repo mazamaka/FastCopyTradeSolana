@@ -18,7 +18,7 @@ async def listen_to_socket():
         "Sec-WebSocket-Key": "jewerbCSO3PAFzwRSVByRQ==",
         "Sec-WebSocket-Version": "13",
         "Upgrade": "websocket",
-        "User-Agent": "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:133.0) Gecko/20100101 Firefox/133.0"
+        "User-Agent": "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:133.0) Gecko/20100101 Firefox/133.0",
     }
 
     try:
@@ -31,14 +31,12 @@ async def listen_to_socket():
                 "channel": "wallet_activity",
                 "data": {
                     "chain": "sol",
-                    "wallet": "REMOVED_WALLET_ADDRESS"
-                }
+                    "wallet": "YOUR_WALLET_ADDRESS",
+                },
             }
 
             await websocket.send(json.dumps(subscription_message))
-            print(f"Отправлено сообщение: {subscription_message}")
 
-            # Чтение сообщений
             while True:
                 try:
                     message = await websocket.recv()

@@ -1,5 +1,6 @@
 import base58
 
+
 class Subscription:
     def __init__(self, wallet_address):
         self.wallet_address = wallet_address
@@ -15,25 +16,16 @@ class Subscription:
                 "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P",
                 {
                     "encoding": "jsonParsed",
-                    "filters": [
-                        {
-                            "memcmp": {
-                                "offset": 32,
-                                "bytes": encoded_address
-                            }
-                        }
-                    ],
-                    "commitment": "confirmed"
-                }
-            ]
+                    "filters": [{"memcmp": {"offset": 32, "bytes": encoded_address}}],
+                    "commitment": "confirmed",
+                },
+            ],
         }
-
 
 
 if __name__ == "__main__":
     # Пример использования
-    wallet_address = "REMOVED_WALLET_ADDRESS"
+    wallet_address = "YOUR_WALLET_ADDRESS"
     subscription = Subscription(wallet_address)
     subscription_request = subscription.create_subscription_request()
     print(subscription_request)
-
